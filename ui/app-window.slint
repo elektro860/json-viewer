@@ -1,18 +1,97 @@
-import { Button, VerticalBox } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Button } from "button.slint";
+
 
 export component AppWindow inherits Window {
-    in-out property <int> counter: 42;
-    callback request-increase-value();
-    VerticalBox {
-        Text {
-            text: "Counter: \{root.counter}";
+    callback select_file();
+    callback key_press(KeyEvent);
+    property <image> file_img: @image-url("images/file.svg");
+
+    default-font-size: 20px;
+    background: #222;
+
+    public function toolbar_toggle() {
+        toolbar.height = toolbar.height == 50px ? 0px : 50px;
+    }
+    public function focus_filter() {
+        filter.focus();
+        toolbar.height = 50px;
+    }
+    VerticalLayout {
+        width: 100%;
+        toolbar := Rectangle {
+            width: 100%;
+            height: 50px;
+            background: #333;
+            clip: true;
+
+            HorizontalLayout {
+                width: 100%;
+                alignment: stretch;
+                padding: 5px;
+                padding-left: 10px;
+                padding-right: 10px;
+                spacing: 10px;
+
+                Rectangle {
+                    width: 50px;
+                    Button {
+                        width: 100%;
+                        height: 100%;
+                        icon: file_img;
+                        clicked => {
+                            select_file();
+                        }
+                    }
+                }
+
+                Rectangle {
+                    background: #555;
+                    border-color: #000;
+                    border-width: 1px;
+                    border-radius: 5px;
+                    HorizontalBox {
+                        padding: 5px;
+                        filter := TextInput {
+                            single-line: true;
+                            wrap: char-wrap;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            animate height {
+                duration: 100ms;
+                easing: ease-in-out-expo;
+            }
         }
 
-        Button {
-            text: "Increase value";
-            clicked => {
-                root.request-increase-value();
+        Rectangle {
+            height: 5px;
+            background: ta_toolbar.has-hover ? #f11 : #111;
+            ta_toolbar := TouchArea {
+                clicked => {
+                    toolbar_toggle();
+                }
             }
+
+            animate background {
+                duration: 200ms;
+                easing: ease-in-out-expo;
+            }
+        }
+
+        Rectangle {
+            min-width: 200px;
+            min-height: 200px;
+        }
+    }
+
+    FocusScope {
+        key-pressed(event) => {
+            key_press(event);
+            return EventResult.accept;
         }
     }
 }
