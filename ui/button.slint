@@ -1,0 +1,28 @@
+export component Button {
+    in property <image> icon;
+    property <bool> hover;
+    callback clicked();
+
+    Rectangle {
+        border-radius: 4px;
+        background: #444;
+
+        border-width: 1px;
+        border-color: ta.has-hover ? #fff : #222;   // hover border color change
+        Image {
+            source: root.icon;
+            colorize: #fff;
+        }
+
+        animate border-color {
+            duration: 200ms;
+            easing: ease-in-out-expo;
+        }
+    }
+
+    ta := TouchArea {
+        clicked => {
+            clicked()
+        }
+    }
+}
