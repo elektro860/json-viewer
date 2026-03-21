@@ -12,14 +12,18 @@ use std::{
 use rfd::FileDialog;
 use slint::{ComponentHandle, ModelRc, VecModel};
 
+use crate::json_utils::Entry;
+
 slint::include_modules!();
 
-mod json_parser;
+mod json_utils;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
 
     let ui_weak = ui.as_weak().unwrap();
+
+    let mut value_vec: Vec<Entry> = Vec::new();
     ui.on_select_file(move || {
         let handle = ui_weak.window().window_handle();
         let file = FileDialog::new()
@@ -30,9 +34,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             .pick_file();
         if let Some(file) = file {
             println!("Selected: {:?}", file);
-            match json_parser::read_file(file) {
+            match json_utils::read_file(file) {
                 Err(e) => eprintln!("{e}"),
-                Ok(_) => {}
+                Ok(_) => {
+                    let j = json_utils::CURRENT_JSON.lock().unwrap();
+                    let json = j.as_ref().unwrap();
+                    let value_count = json_utils::get_value_count(json.json());
+
+                    value_vec.clear();
+                    value_vec.reserve(value_count);
+                    json_utils::populate_vector(&mut value_vec, json.json(), "", 0);
+
+                    println!("{:?}", value_vec);
+                    println!(
+                        "Total values: {value_count}\nTotal entries: {}",
+                        value_vec.len()
+                    );
+                }
             }
         }
     });
