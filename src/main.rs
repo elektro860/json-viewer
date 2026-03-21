@@ -14,7 +14,7 @@ use slint::{ComponentHandle, ModelRc, VecModel};
 
 slint::include_modules!();
 
-static SELECTED_FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
+mod json_parser;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
@@ -30,8 +30,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             .pick_file();
         if let Some(file) = file {
             println!("Selected: {:?}", file);
-            let mut m = SELECTED_FILE.lock().unwrap();
-            *m = Some(file);
+            match json_parser::read_file(file) {
+                Err(e) => eprintln!("{e}"),
+                Ok(_) => {}
+            }
         }
     });
 
