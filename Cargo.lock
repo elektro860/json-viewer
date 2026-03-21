@@ -2452,6 +2452,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-viewer"
+version = "0.1.0"
+dependencies = [
+ "rfd",
+ "serde_json",
+ "slint",
+ "slint-build",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4211,16 +4221,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "spin_on",
-]
-
-[[package]]
-name = "slint-rust-template"
-version = "0.1.0"
-dependencies = [
- "rfd",
- "serde_json",
- "slint",
- "slint-build",
 ]
 
 [[package]]
