@@ -6,25 +6,37 @@ import {
 } from "std-widgets.slint";
 import { Button } from "button.slint";
 
+enum ValueType {
+  null,
+  number,
+  bool,
+  string,
+  array,
+  object,
+}
 export struct JsonValue {
   name: string,
   value: string,
   level: int,
+  value_type: ValueType,
 }
 component JsonRow {
     in property <string> name;
     in property <string> value;
     in property <int> level;
+    in property <ValueType> type;
 
+    property <length> indent:level * 25px;
     Rectangle {
         width: 100%;
-        padding-left: level * 1px;
+
         VerticalLayout {
             HorizontalLayout {
+                padding-left: indent;
                 alignment: start;
-                spacing: 20px;
-                Text {
-                    text: name;
+
+                if name != "": Text {
+                    text: name + ": ";
                 }
 
                 Text {
@@ -34,7 +46,7 @@ component JsonRow {
 
             Rectangle {
                 height: 1px;
-                background: #aaa;
+                background: #222;
             }
         }
     }
@@ -131,6 +143,7 @@ export component AppWindow inherits Window {
                     value: k.value;
                     name: k.name;
                     level: k.level;
+                    type: k.value_type;
                 }
             }
         }

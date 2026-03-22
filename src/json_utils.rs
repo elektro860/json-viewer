@@ -2,14 +2,17 @@ use std::{
     error::Error,
     fs::{self, File},
     io::BufReader,
+    mem::take,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Mutex,
 };
 
+use regex::Regex;
 use serde_json::Value;
-use slint::{SharedString, ToSharedString};
+use slint::{ModelRc, SharedString, ToSharedString, VecModel};
 
-use crate::JsonValue;
+use crate::{AppWindow, JsonValue, ValueType};
 
 #[derive(Debug)]
 pub struct CurrentJSON {
@@ -26,22 +29,25 @@ impl CurrentJSON {
 }
 pub static CURRENT_JSON: Mutex<Option<CurrentJSON>> = Mutex::new(None);
 
-#[derive(Debug)]
-pub struct Entry {
-    json: JsonValue,
-}
-pub fn populate_vector<'a>(vec: &'a mut Vec<Entry>, value: &'a Value, name: &str, level: i32) {
+pub fn populate_vector<'a>(vec: &'a mut Vec<JsonValue>, value: &'a Value, name: &str, level: i32) {
     let v = match value {
         Value::Array(_) => SharedString::from("["),
         Value::Object(_) => SharedString::from("{"),
         _ => value.to_shared_string(),
     };
-    vec.push(Entry {
-        json: JsonValue {
-            level: level.into(),
-            name: name.into(),
-            value: v,
-        },
+    let value_type = match value {
+        Value::Null => ValueType::Null,
+        Value::Number(_) => ValueType::Number,
+        Value::Bool(_) => ValueType::Bool,
+        Value::Array(_) => ValueType::Array,
+        Value::Object(_) => ValueType::Object,
+        Value::String(_) => ValueType::String,
+    };
+    vec.push(JsonValue {
+        level: level.into(),
+        name: name.into(),
+        value: v,
+        value_type,
     });
     match value {
         Value::Array(a) => a
@@ -84,4 +90,14 @@ fn parse_file(path: &Path) -> Result<Value, Box<dyn Error>> {
     let json: Value = serde_json::from_reader(reader)?;
 
     Ok(json)
+}
+
+pub fn set_json_values(ui: &AppWindow, values: &mut Vec<JsonValue>) {
+    let model = Rc::new(VecModel::from(take(&mut *values)));
+    ui.set_json_values(ModelRc::new(model));
+}
+pub fn filter_json<'a>(regex: &Regex, values: &'a [JsonValue]) -> Vec<&'a JsonValue> {
+    let mut ret = Vec::new();
+
+    ret
 }

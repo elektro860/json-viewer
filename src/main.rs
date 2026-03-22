@@ -2,17 +2,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
+    cell::RefCell,
     env,
     error::Error,
+    mem::take,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::Mutex,
+    rc::{Rc, Weak},
+    sync::{Arc, Mutex},
 };
 
 use rfd::FileDialog;
 use slint::{ComponentHandle, ModelRc, VecModel};
-
-use crate::json_utils::Entry;
 
 slint::include_modules!();
 
@@ -20,10 +21,11 @@ mod json_utils;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
+    let mut value_vec: Rc<RefCell<Vec<JsonValue>>> = Rc::new(RefCell::new(Vec::new()));
 
     let ui_weak = ui.as_weak().unwrap();
 
-    let mut value_vec: Vec<Entry> = Vec::new();
+    let mut value_vec = value_vec.clone();
     ui.on_select_file(move || {
         let handle = ui_weak.window().window_handle();
         let file = FileDialog::new()
@@ -40,16 +42,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let j = json_utils::CURRENT_JSON.lock().unwrap();
                     let json = j.as_ref().unwrap();
                     let value_count = json_utils::get_value_count(json.json());
+                    let mut value_vec = value_vec.borrow_mut();
 
                     value_vec.clear();
-                    value_vec.reserve(value_count);
+                    value_vec.reserve(value_count + 100); // extra in case of addition
                     json_utils::populate_vector(&mut value_vec, json.json(), "", 0);
 
-                    println!("{:?}", value_vec);
+                    // println!("{:?}", value_vec);
                     println!(
                         "Total values: {value_count}\nTotal entries: {}",
                         value_vec.len()
                     );
+
+                    json_utils::set_json_values(&ui_weak, &mut value_vec);
                 }
             }
         }

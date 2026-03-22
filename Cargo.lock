@@ -2455,6 +2455,7 @@ dependencies = [
 name = "json-viewer"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "rfd",
  "serde_json",
  "slint",
