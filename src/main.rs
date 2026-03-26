@@ -19,52 +19,41 @@ use slint::{ComponentHandle, ModelRc, VecModel};
 slint::include_modules!();
 
 mod json_utils;
+mod ui_handles;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
     let mut value_vec: Rc<RefCell<Vec<JsonValue>>> = Rc::new(RefCell::new(Vec::new()));
     let mut filtered_values: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
-
-    let ui_weak = ui.as_weak().unwrap();
+    // let mut value_vec: Rc<RefCell<Vec<JsonValue>>> = Rc::new(RefCell::new(Vec::new()));
+    // let mut filtered_values: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
 
     let mut value_vec_ref = value_vec.clone();
+    let ui_weak = ui.as_weak().unwrap();
     ui.on_select_file(move || {
-        let handle = ui_weak.window().window_handle();
-        let file = FileDialog::new()
-            .set_parent(&handle)
-            .set_directory(env::current_dir().unwrap())
-            .add_filter("JSON", &["json"])
-            .set_title("Select JSON file")
-            .pick_file();
-        if let Some(file) = file {
-            println!("Selected: {:?}", file);
-            match json_utils::read_file(file) {
-                Err(e) => eprintln!("{e}"),
-                Ok(_) => {
-                    let j = json_utils::CURRENT_JSON.lock().unwrap();
-                    let json = j.as_ref().unwrap();
-                    let value_count = json_utils::get_value_count(json.json());
-                    let mut value_vec = value_vec_ref.borrow_mut();
-
-                    value_vec.clear();
-                    value_vec.reserve(value_count + 100); // extra in case of addition
-                    json_utils::populate_vector(&mut value_vec, json.json(), "", 0);
-
-                    // println!("{:?}", value_vec);
-                    println!(
-                        "Total values: {value_count}\nTotal entries: {}",
-                        value_vec.len()
-                    );
-
-                    json_utils::set_json_values(&ui_weak, &value_vec);
-                }
-            }
-        }
+        ui_handles::on_select_file(&ui_weak, &value_vec_ref);
     });
 
     let ui_weak = ui.as_weak().unwrap();
+    let mut filtered_values_ref = filtered_values.clone();
     ui.on_key_press(move |key| {
         let t = key.text.as_str().to_ascii_lowercase();
+        if t == "n" && key.modifiers.control {
+            ui_handles::filter_next(
+                &ui_weak,
+                &filtered_values_ref,
+                ui_handles::Direction::Forward,
+            );
+            return;
+        }
+        if t == "p" && key.modifiers.control {
+            ui_handles::filter_next(
+                &ui_weak,
+                &filtered_values_ref,
+                ui_handles::Direction::Backward,
+            );
+            return;
+        }
         if t == "n" {
             ui_weak.invoke_toolbar_toggle();
         }
@@ -77,17 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut value_vec_ref = value_vec.clone();
     let mut filtered_values_ref = filtered_values.clone();
     ui.on_set_filter(move |filter| {
-        let values = value_vec_ref.borrow();
-        let regex = Regex::new(&filter);
-        if let Ok(regex) = regex {
-            let mut filtered = json_utils::filter_json(&regex, values.as_slice());
-            let mut values = filtered_values_ref.borrow_mut();
-            values.clear();
-            values.reserve(filtered.len());
-            filtered.iter().for_each(|v| values.push(v.id));
-        } else {
-            eprintln!("Invalid regex");
-        }
+        ui_handles::on_set_filter(&ui_weak, &value_vec_ref, &filtered_values_ref, &filter);
     });
     let ui_weak = ui.as_weak().unwrap();
     ui.on_check_filter(move |filter| {

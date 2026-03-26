@@ -5,53 +5,7 @@ import {
     ListView,
 } from "std-widgets.slint";
 import { Button } from "button.slint";
-
-enum ValueType {
-  null,
-  number,
-  bool,
-  string,
-  array,
-  object,
-}
-export struct JsonValue {
-  name: string,
-  value: string,
-  level: int,
-  value_type: ValueType,
-  id: int,
-}
-component JsonRow {
-    in property <string> name;
-    in property <string> value;
-    in property <int> level;
-    in property <ValueType> type;
-
-    property <length> indent:level * 25px;
-    Rectangle {
-        width: 100%;
-
-        VerticalLayout {
-            HorizontalLayout {
-                padding-left: indent;
-                alignment: start;
-
-                if name != "": Text {
-                    text: name + ": ";
-                }
-
-                Text {
-                    text: value;
-                }
-            }
-
-            Rectangle {
-                height: 1px;
-                background: #222;
-            }
-        }
-    }
-}
+import { JsonRow, JsonValue } from "json.slint";
 
 export component AppWindow inherits Window {
     callback set_filter(string);
@@ -62,8 +16,12 @@ export component AppWindow inherits Window {
     property <image> search_img: @image-url("images/search.svg");
     in property <[JsonValue]> json_values;
     in property <bool> is_regex_valid: true;
+    out property <int> current_value: values.viewport-y / -30px;
     default-font-size: 20px;
     background: #222;
+
+    min-width: 700px;
+    min-height: 300px;
 
     public function toolbar_toggle() {
         toolbar.height = toolbar.height == 50px ? 0px : 50px;
@@ -71,6 +29,9 @@ export component AppWindow inherits Window {
     public function focus_filter() {
         filter.focus();
         toolbar.height = 50px;
+    }
+    public function move_to(id: int) {
+        values.viewport-y = - (id * 30px);
     }
 
     VerticalLayout {
@@ -110,6 +71,7 @@ export component AppWindow inherits Window {
                         icon: search_img;
                         clicked => {
                             set_filter(filter.text);
+                            input.focus();
                         }
                     }
                 }
@@ -127,6 +89,7 @@ export component AppWindow inherits Window {
                             vertical-alignment: center;
                             accepted => {
                                 set_filter(filter.text);
+                                input.focus();
                             }
                             edited => {
                                 check_filter(filter.text);
@@ -159,20 +122,15 @@ export component AppWindow inherits Window {
 
         Rectangle {
             background: #111;
-            ListView {
-                min-width: 200px;
-                min-height: 200px;
-                for k in root.json_values: JsonRow {
-                    value: k.value;
-                    name: k.name;
-                    level: k.level;
-                    type: k.value_type;
+            values := ListView {
+                for k[i] in root.json_values: JsonRow {
+                    value: k;
                 }
             }
         }
     }
 
-    FocusScope {
+    input := FocusScope {
         key-pressed(event) => {
             key_press(event);
             return EventResult.accept;

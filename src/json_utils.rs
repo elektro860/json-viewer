@@ -17,7 +17,8 @@ use regex::Regex;
 use serde_json::Value;
 use slint::{ModelRc, SharedString, ToSharedString, VecModel};
 
-use crate::{AppWindow, JsonValue, ValueType};
+use crate::{json_utils::json_value::ToUI, AppWindow, JsonValue, ValueType};
+mod json_value;
 
 #[derive(Debug)]
 pub struct CurrentJSON {
@@ -34,34 +35,21 @@ impl CurrentJSON {
 }
 pub static CURRENT_JSON: Mutex<Option<CurrentJSON>> = Mutex::new(None);
 
-pub fn populate_vector<'a>(vec: &'a mut Vec<JsonValue>, value: &'a Value, name: &str, level: i32) {
-    let v = match value {
-        Value::Array(_) => SharedString::from("["),
-        Value::Object(_) => SharedString::from("{"),
-        _ => value.to_shared_string(),
-    };
-    let value_type = match value {
-        Value::Null => ValueType::Null,
-        Value::Number(_) => ValueType::Number,
-        Value::Bool(_) => ValueType::Bool,
-        Value::Array(_) => ValueType::Array,
-        Value::Object(_) => ValueType::Object,
-        Value::String(_) => ValueType::String,
-    };
-    vec.push(JsonValue {
-        level: level.into(),
-        name: name.into(),
-        value: v,
-        value_type,
-        id: vec.len() as i32,
-    });
+pub fn populate_vector<'a>(
+    json_values: &'a mut Vec<JsonValue>,
+    value: &'a Value,
+    name: &str,
+    level: i32,
+) {
+    json_values.push(value.to_ui(name.into(), json_values.len() as i32, level));
+
     match value {
         Value::Array(a) => a
             .iter()
-            .for_each(|v| populate_vector(vec, v, "", level + 1)),
+            .for_each(|v| populate_vector(json_values, v, "", level + 1)),
         Value::Object(a) => a
             .iter()
-            .for_each(|(key, v)| populate_vector(vec, v, key.as_str(), level + 1)),
+            .for_each(|(key, v)| populate_vector(json_values, v, key.as_str(), level + 1)),
         _ => {}
     }
 }
@@ -100,12 +88,11 @@ fn parse_file(path: &Path) -> Result<Value, Box<dyn Error>> {
 
 pub fn set_json_values(ui: &AppWindow, values: &Vec<JsonValue>) {
     let clone = values.clone();
-    let model = Rc::new(VecModel::from(clone));
-    ui.set_json_values(ModelRc::new(model));
+    let model = ModelRc::new(Rc::new(VecModel::from(clone)));
+    ui.set_json_values(model);
 }
 pub fn filter_json<'a>(regex: &Regex, values: &'a [JsonValue]) -> Vec<&'a JsonValue> {
-    let start = Instant::now();
-    let mut ret = values
+    values
         .par_chunks(500)
         .flat_map_iter(|chunk| {
             chunk.iter().filter_map(|v| {
@@ -118,8 +105,5 @@ pub fn filter_json<'a>(regex: &Regex, values: &'a [JsonValue]) -> Vec<&'a JsonVa
                 None
             })
         })
-        .collect();
-
-    println!("Filtered in {:?}", start.elapsed());
-    ret
+        .collect()
 }

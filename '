@@ -1,0 +1,51 @@
+export enum ValueType {
+  null,
+  number,
+  bool,
+  string,
+  array,
+  object,
+}
+export struct JsonValue {
+  name: string,
+  value: string,
+  level: int,
+  value_type: ValueType,
+  id: int,
+
+  // Flags
+  in_filter: bool,
+}
+
+export component JsonRow {
+    in property <JsonValue> value;
+
+    property <length> indent:value.level * 10px;
+    Rectangle {
+        width: 100%;
+        height: 60px;
+
+        background: value.in-filter ? #933 : #333;
+        VerticalLayout {
+            height: parent.height;
+            HorizontalLayout {
+                horizontal-stretch: 1;
+                padding-left: indent;
+                alignment: start;
+
+                if value.name != "": Text {
+                    text: value.name + ": ";
+                }
+
+                Text {
+                    text: value.value;
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: #222;
+            }
+        }
+    }
+}
