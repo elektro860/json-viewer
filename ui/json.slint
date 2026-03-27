@@ -17,35 +17,48 @@ export struct JsonValue {
   in_filter: bool,
 }
 
-export component JsonRow {
+export component JsonRow inherits Rectangle {
     in property <JsonValue> value;
 
     property <length> indent:value.level * 10px;
     height: 30px;
-    Rectangle {
-        width: 100%;
-        height: 100%;
+    width: 100%;
 
-        background: value.in-filter ? #933 : #333;
-        VerticalLayout {
-            spacing: 0;
-            HorizontalLayout {
-                padding-left: indent;
-                alignment: start;
+    background: value.in-filter ? #933 : #333;
+    VerticalLayout {
+        spacing: 0;
+        HorizontalLayout {
+            padding-left: indent;
+            alignment: start;
 
-                if value.name != "": Text {
-                    text: value.name + ": ";
-                }
-
-                Text {
-                    text: value.value;
-                }
+            if value.name != "": Text {
+                text: value.name + ": ";
             }
 
             Rectangle {
-                height: 1px;
-                background: #222;
+                value_input := TextInput {
+                    text: value.value;
+                }
+
+                states [
+                    focussed when value_input.has-focus: {
+                        background: #444;
+                    }
+                ]
             }
         }
+
+        Rectangle {
+            height: 1px;
+            background: #222;
+        }
     }
+
+    ta := TouchArea { }
+
+    states [
+        hover when ta.has-hover: {
+            background: #555;
+        }
+    ]
 }

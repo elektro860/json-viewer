@@ -18,6 +18,7 @@ use slint::{ComponentHandle, ModelRc, VecModel};
 
 slint::include_modules!();
 
+mod input_manager;
 mod json_utils;
 mod ui_handles;
 
@@ -37,29 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ui_weak = ui.as_weak().unwrap();
     let mut filtered_values_ref = filtered_values.clone();
     ui.on_key_press(move |key| {
-        let t = key.text.as_str().to_ascii_lowercase();
-        if t == "n" && key.modifiers.control {
-            ui_handles::filter_next(
-                &ui_weak,
-                &filtered_values_ref,
-                ui_handles::Direction::Forward,
-            );
-            return;
-        }
-        if t == "p" && key.modifiers.control {
-            ui_handles::filter_next(
-                &ui_weak,
-                &filtered_values_ref,
-                ui_handles::Direction::Backward,
-            );
-            return;
-        }
-        if t == "n" {
-            ui_weak.invoke_toolbar_toggle();
-        }
-        if t == "f" && key.modifiers.control {
-            ui_weak.invoke_focus_filter();
-        }
+        input_manager::process_input(&key, &ui_weak, &filtered_values_ref);
     });
 
     let ui_weak = ui.as_weak().unwrap();
