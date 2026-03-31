@@ -20,6 +20,7 @@ export struct JsonValue {
 export component JsonRow inherits Rectangle {
     in property <JsonValue> value;
 
+    property <bool> is-array: value.value == "{" || value.value == "[";
     property <length> indent:value.level * 10px;
     height: 30px;
     width: 100%;
@@ -34,17 +35,19 @@ export component JsonRow inherits Rectangle {
             if value.name != "": Text {
                 text: value.name + ": ";
             }
+            if is-array: Text {
+                text: value.value;
+            }
 
-            Rectangle {
-                value_input := TextInput {
+            if !is-array: Rectangle {
+                border-color: #bbb;
+                border-width: 1px;
+
+                TextInput {
                     text: value.value;
+                    input-type: text;
+                    width: parent.width;
                 }
-
-                states [
-                    focussed when value_input.has-focus: {
-                        background: #444;
-                    }
-                ]
             }
         }
 
@@ -52,13 +55,13 @@ export component JsonRow inherits Rectangle {
             height: 1px;
             background: #222;
         }
+
+        // ta := TouchArea { }
+    //
+    // states [
+    //     hover when ta.has-hover: {
+    //         background: #555;
+    //     }
+    // ]
     }
-
-    ta := TouchArea { }
-
-    states [
-        hover when ta.has-hover: {
-            background: #555;
-        }
-    ]
 }
