@@ -19,6 +19,10 @@ impl ToUI for Value {
             Value::Object(_) => ValueType::Object,
             Value::String(_) => ValueType::String,
         };
+        let name = match name.len() {
+            0 => "".into(),
+            _ => format!("\"{}\"", name).into(),
+        };
 
         JsonValue {
             level,

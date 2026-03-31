@@ -1,3 +1,4 @@
+import { JsonUtils } from "JsonUtils.slint";
 export enum ValueType {
   null,
   number,
@@ -32,14 +33,32 @@ export component JsonRow inherits Rectangle {
             padding-left: indent;
             alignment: start;
 
+            if value.name != "": Rectangle {
+                min-width: 1rem;
+                border-color: #bbb;
+                border-width: 1px;
+
+                TextInput {
+                    text: value.name;
+                    input-type: text;
+                    width: parent.width;
+
+                    edited => {
+                        let valid = JsonUtils.is-valid-json-key(self.text);
+                        parent.background = valid ? #333 : #c33;
+                    }
+                }
+            }
+
             if value.name != "": Text {
-                text: value.name + ": ";
+                text: ": ";
             }
             if is-array: Text {
                 text: value.value;
             }
 
             if !is-array: Rectangle {
+                min-width: 1rem;
                 border-color: #bbb;
                 border-width: 1px;
 
@@ -47,6 +66,11 @@ export component JsonRow inherits Rectangle {
                     text: value.value;
                     input-type: text;
                     width: parent.width;
+
+                    edited => {
+                        let valid = JsonUtils.is-valid-json-value(self.text);
+                        parent.background = valid ? #333 : #c33;
+                    }
                 }
             }
         }

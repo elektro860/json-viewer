@@ -53,6 +53,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         ui_weak.set_is_regex_valid(r.is_ok());
     });
 
+    ui.global::<JsonUtils>()
+        .on_is_valid_json_value(|str| json_utils::validate_json_value(str.as_str()));
+    ui.global::<JsonUtils>()
+        .on_is_valid_json_key(|str| json_utils::valide_json_key(str.as_str()));
+
     ui.run()?;
 
     Ok(())

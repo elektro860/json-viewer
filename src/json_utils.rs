@@ -14,7 +14,7 @@ use rayon::{
     slice::ParallelSlice,
 };
 use regex::Regex;
-use serde_json::Value;
+use serde_json::{from_str, Value};
 use slint::{ModelRc, SharedString, ToSharedString, VecModel};
 
 use crate::{json_utils::json_value::ToUI, AppWindow, JsonValue, ValueType};
@@ -68,6 +68,21 @@ pub fn get_value_count(json: &Value) -> usize {
     }
 
     counter
+}
+pub fn validate_json_value(json_text: &str) -> bool {
+    let result = from_str::<Value>(json_text.trim());
+    result.is_ok()
+}
+pub fn valide_json_key(json_text: &str) -> bool {
+    let str = json_text.trim();
+    if str.is_empty() {
+        return true;
+    }
+    let result = from_str::<Value>(str);
+    match result {
+        Ok(v) => v.is_string(),
+        Err(e) => false,
+    }
 }
 
 pub fn read_file(path: PathBuf) -> Result<(), Box<dyn Error>> {

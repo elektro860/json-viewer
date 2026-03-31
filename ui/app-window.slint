@@ -6,8 +6,11 @@ import {
 } from "std-widgets.slint";
 import { Button } from "button.slint";
 import { JsonRow, JsonValue } from "json.slint";
+import { JsonUtils } from "JsonUtils.slint";
+export { JsonUtils }
 
 export component AppWindow inherits Window {
+
     callback set_filter(string);
     callback select_file();
     callback key_press(KeyEvent);
