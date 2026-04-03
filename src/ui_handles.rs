@@ -1,17 +1,24 @@
 use std::cell::RefCell;
+use std::error::Error;
+use std::mem::swap;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Instant;
 use std::{env, rc::Weak};
 
 use regex::Regex;
 use rfd::FileDialog;
-use slint::ComponentHandle;
+use serde_json::{from_str, Value};
+use slint::{ComponentHandle, SharedString};
 
+use crate::json_enviroment::JsonEnviroment;
+use crate::json_utils::json_value::ToUI;
+use crate::json_utils::validate_json_value;
 use crate::slint_generatedAppWindow::AppWindow;
-use crate::JsonValue;
-use crate::{json_utils, ui_handles};
+use crate::{json_utils, ui_handles, unwrap_result};
+use crate::{unwrap_option, JsonValue};
 
-pub fn on_select_file(ui_weak: &AppWindow, value_vec: &Rc<RefCell<Vec<JsonValue>>>) {
+pub fn on_select_file(ui_weak: &AppWindow) {
     let handle = ui_weak.window().window_handle();
     let file = FileDialog::new()
         .set_parent(&handle)
@@ -23,60 +30,31 @@ pub fn on_select_file(ui_weak: &AppWindow, value_vec: &Rc<RefCell<Vec<JsonValue>
         println!("Selected: {:?}", file);
         match json_utils::read_file(file) {
             Err(e) => eprintln!("{e}"),
-            Ok(_) => {
-                let j = json_utils::CURRENT_JSON.lock().unwrap();
-                let json = j.as_ref().unwrap();
-                let value_count = json_utils::get_value_count(json.json());
-                let mut value_vec = value_vec.borrow_mut();
+            Ok(env) => {
+                let values = env.borrow_entries();
 
-                value_vec.clear();
-                value_vec.reserve_exact(value_count + 100); // extra in case of addition
-                json_utils::populate_vector(&mut value_vec, json.json(), "", 0);
-
-                // println!("{:?}", value_vec);
-                println!(
-                    "Total values: {value_count}\nTotal entries: {}",
-                    value_vec.len()
-                );
-
-                json_utils::set_json_values(&ui_weak, &value_vec);
+                json_utils::set_json_values(&ui_weak, values);
+                let mut opt = json_utils::CURRENT_JSON.lock().unwrap();
+                *opt = Some(env);
             }
         }
     }
 }
-pub fn on_set_filter(
-    ui: &AppWindow,
-    value_vec: &Rc<RefCell<Vec<JsonValue>>>,
-    fitered_values: &Rc<RefCell<Vec<i32>>>,
-    filter: &str,
-) {
+pub fn on_set_filter(ui: &AppWindow, filter: &str) {
     let regex = Regex::new(filter);
+
     if let Ok(regex) = regex {
-        let mut values = value_vec.borrow_mut();
+        let mut mutex = json_utils::CURRENT_JSON.lock().unwrap();
+        let env = unwrap_option!(mutex.as_mut());
         let start = Instant::now();
-        let mut filtered = json_utils::filter_json(&regex, values.as_slice());
+
+        env.set_filter(&regex);
         println!("Filtered in {:?}", start.elapsed());
-        let mut filtered_ids = fitered_values.borrow_mut();
+        let filtered = env.borrow_filtered_indicies();
 
-        filtered_ids.clear();
-        filtered_ids.reserve(filtered.len());
-        filtered.iter().for_each(|v| filtered_ids.push(v.id));
-
-        let mut iter = filtered_ids.iter();
-        let end = values.len() as i32;
-        let mut next = *(iter.next().unwrap_or(&end)) as usize;
-
-        values.iter_mut().enumerate().for_each(|(id, v)| {
-            if id >= next {
-                next = *(iter.next().unwrap_or(&end)) as usize;
-                v.in_filter = true;
-            } else {
-                v.in_filter = false;
-            }
-        });
-        json_utils::set_json_values(ui, &values);
-        if let Some(id) = filtered_ids.iter().next() {
-            ui.invoke_move_to(*id);
+        json_utils::set_json_values(ui, env.borrow_entries());
+        if let Some(index) = filtered.iter().next() {
+            ui.invoke_move_to(*index as i32);
         }
     } else {
         eprintln!("Invalid regex");
@@ -87,13 +65,16 @@ pub enum Direction {
     Forward,
     Backward,
 }
-pub fn filter_next(ui: &AppWindow, filtered_values: &Rc<RefCell<Vec<i32>>>, dir: Direction) {
-    let mut prev: Option<&i32> = None;
-    let mut next: Option<&i32> = None;
+pub fn filter_next(ui: &AppWindow, dir: Direction) {
+    let mut prev = None;
+    let mut next = None;
 
-    let filter = filtered_values.borrow();
-    let current_index = ui.get_current_value();
-    let last_p = filter.iter().position(|v| *v > current_index);
+    let opt = json_utils::CURRENT_JSON.lock().unwrap();
+    let enviroment = unwrap_option!(opt.deref());
+    let filter = &enviroment.borrow_filtered_indicies();
+
+    let current_index = ui.get_current_value() as usize;
+    let last_p = filter.iter().position(|index| *index > current_index);
     match last_p {
         None => {
             prev = filter.iter().nth_back(2);
@@ -109,6 +90,33 @@ pub fn filter_next(ui: &AppWindow, filtered_values: &Rc<RefCell<Vec<i32>>>, dir:
         Direction::Backward => prev,
     };
     if let Some(pos) = pos {
-        ui.invoke_move_to(*pos);
+        ui.invoke_move_to(*pos as i32);
     }
+}
+
+#[derive(Debug)]
+pub(crate) enum SetErrors {
+    InvalidIndex,
+    InvalidJson,
+    InvalidKey,
+}
+pub fn set_value(ui: &AppWindow, id: i32, str: &str) -> Result<(), SetErrors> {
+    let mut mutex = json_utils::CURRENT_JSON.lock();
+    let env = unwrap_result!(mutex.as_deref_mut().unwrap());
+
+    let result = env.set_value(id as usize, str);
+    json_utils::set_json_values(ui, env.borrow_entries());
+    result?;
+
+    Ok(())
+}
+pub fn set_key(ui: &AppWindow, id: i32, str: &str) -> Result<(), SetErrors> {
+    let mut mutex = json_utils::CURRENT_JSON.lock();
+    let env = unwrap_result!(mutex.as_deref_mut().unwrap());
+
+    let result = env.set_key(id as usize, str);
+    json_utils::set_json_values(ui, env.borrow_entries());
+    result?;
+
+    Ok(())
 }

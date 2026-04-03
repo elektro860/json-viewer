@@ -43,6 +43,12 @@ export component JsonRow inherits Rectangle {
                     input-type: text;
                     width: parent.width;
 
+                    accepted => {
+                        let valid = JsonUtils.set-key(value.id, self.text);
+                        if !valid {
+                            self.text = value.name;
+                        }
+                    }
                     edited => {
                         let valid = JsonUtils.is-valid-json-key(self.text);
                         parent.background = valid ? #333 : #c33;
@@ -67,6 +73,12 @@ export component JsonRow inherits Rectangle {
                     input-type: text;
                     width: parent.width;
 
+                    accepted => {
+                        let valid = JsonUtils.set-value(value.id, self.text);
+                        if !valid {
+                            self.text = value.name;
+                        }
+                    }
                     edited => {
                         let valid = JsonUtils.is-valid-json-value(self.text);
                         parent.background = valid ? #333 : #c33;

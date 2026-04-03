@@ -10,49 +10,22 @@ use std::{
 };
 
 use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
+    iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator},
     slice::ParallelSlice,
 };
 use regex::Regex;
 use serde_json::{from_str, Value};
-use slint::{ModelRc, SharedString, ToSharedString, VecModel};
+use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 
-use crate::{json_utils::json_value::ToUI, AppWindow, JsonValue, ValueType};
-mod json_value;
+use crate::{
+    json_enviroment::{Entry, JsonEnviroment},
+    json_utils::json_value::ToUI,
+    AppWindow, JsonValue, ValueType,
+};
+pub mod json_value;
 
-#[derive(Debug)]
-pub struct CurrentJSON {
-    path: PathBuf,
-    json: Value,
-}
-impl CurrentJSON {
-    pub fn path(&self) -> &Path {
-        self.path.as_path()
-    }
-    pub fn json(&self) -> &Value {
-        &self.json
-    }
-}
-pub static CURRENT_JSON: Mutex<Option<CurrentJSON>> = Mutex::new(None);
+pub static CURRENT_JSON: Mutex<Option<JsonEnviroment>> = Mutex::new(None);
 
-pub fn populate_vector<'a>(
-    json_values: &'a mut Vec<JsonValue>,
-    value: &'a Value,
-    name: &str,
-    level: i32,
-) {
-    json_values.push(value.to_ui(name.into(), json_values.len() as i32, level));
-
-    match value {
-        Value::Array(a) => a
-            .iter()
-            .for_each(|v| populate_vector(json_values, v, "", level + 1)),
-        Value::Object(a) => a
-            .iter()
-            .for_each(|(key, v)| populate_vector(json_values, v, key.as_str(), level + 1)),
-        _ => {}
-    }
-}
 pub fn get_value_count(json: &Value) -> usize {
     let mut counter = 1;
 
@@ -69,9 +42,8 @@ pub fn get_value_count(json: &Value) -> usize {
 
     counter
 }
-pub fn validate_json_value(json_text: &str) -> bool {
-    let result = from_str::<Value>(json_text.trim());
-    result.is_ok()
+pub fn validate_json_value(json_text: &str) -> Option<Value> {
+    from_str::<Value>(json_text.trim()).ok()
 }
 pub fn valide_json_key(json_text: &str) -> bool {
     let str = json_text.trim();
@@ -85,12 +57,9 @@ pub fn valide_json_key(json_text: &str) -> bool {
     }
 }
 
-pub fn read_file(path: PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn read_file(path: PathBuf) -> Result<JsonEnviroment, Box<dyn Error>> {
     let v = parse_file(path.as_path())?;
-    let mut c_json = CURRENT_JSON.lock()?;
-    *c_json = Some(CurrentJSON { path, json: v });
-
-    Ok(())
+    Ok(JsonEnviroment::from_json(v, path))
 }
 
 fn parse_file(path: &Path) -> Result<Value, Box<dyn Error>> {
@@ -101,24 +70,27 @@ fn parse_file(path: &Path) -> Result<Value, Box<dyn Error>> {
     Ok(json)
 }
 
-pub fn set_json_values(ui: &AppWindow, values: &Vec<JsonValue>) {
-    let clone = values.clone();
+pub fn set_json_values(ui: &AppWindow, values: &Vec<Entry>) {
+    let clone = {
+        let mut ret = Vec::with_capacity(values.len());
+        values.iter().for_each(|v| ret.push(v.render.clone()));
+        ret
+    };
     let model = ModelRc::new(Rc::new(VecModel::from(clone)));
     ui.set_json_values(model);
 }
-pub fn filter_json<'a>(regex: &Regex, values: &'a [JsonValue]) -> Vec<&'a JsonValue> {
+pub fn filter_json<'a>(regex: &Regex, values: &[Entry<'a>]) -> Vec<usize> {
     values
-        .par_chunks(500)
-        .flat_map_iter(|chunk| {
-            chunk.iter().filter_map(|v| {
-                if regex.is_match(v.name.as_str()) {
-                    return Some(v);
-                }
-                if regex.is_match(v.value.as_str()) {
-                    return Some(v);
-                }
-                None
-            })
+        .par_iter()
+        .enumerate()
+        .filter_map(|(i, v)| {
+            if regex.is_match(v.render.name.as_str()) {
+                return Some(i);
+            }
+            if regex.is_match(v.render.value.as_str()) {
+                return Some(i);
+            }
+            None
         })
         .collect()
 }
