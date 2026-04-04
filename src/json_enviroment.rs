@@ -5,7 +5,7 @@ use std::{
 
 use ouroboros::self_referencing;
 use regex::Regex;
-use serde_json::Value;
+use serde_json::{map::Keys, Value};
 use slint::{SharedString, ToSharedString};
 
 use crate::{
@@ -28,7 +28,7 @@ pub(crate) struct JsonEnviroment {
 pub enum ValueReference<'a> {
     Array,
     Object,
-    Primitive(&'a mut Value),
+    Primitive(&'a mut Value, String),
 }
 #[derive(Debug)]
 pub(crate) struct Entry<'a> {
@@ -87,7 +87,7 @@ impl JsonEnviroment {
                     .for_each(|(key, v)| Self::populate_recursive(vec, v, key.as_str(), level + 1));
                 ValueReference::Object
             }
-            _ => ValueReference::Primitive(value_ref),
+            _ => ValueReference::Primitive(value_ref, name.to_string()),
         };
         vec.push(Entry {
             render: value,
@@ -101,7 +101,7 @@ impl JsonEnviroment {
             let v = match validate_json_value(str) {
                 Some(v) => v,
                 None => {
-                    if let ValueReference::Primitive(p) = &value.json {
+                    if let ValueReference::Primitive(p, key) = &value.json {
                         dbg!("Setting value to {}", p.to_shared_string());
                         value.render.value = p.to_shared_string();
                     }
@@ -109,7 +109,7 @@ impl JsonEnviroment {
                 }
             };
             match &mut value.json {
-                ValueReference::Primitive(json) => {
+                ValueReference::Primitive(json, key) => {
                     value.render.value = SharedString::from(str);
                     value.render.value_type = v.value_type();
                     **json = v;
@@ -127,9 +127,18 @@ impl JsonEnviroment {
             match v {
                 Value::String(s) => {
                     entry.render.name = SharedString::from(str);
+                    if let ValueReference::Primitive(json, key) = &mut entry.json {
+                        *key = str.to_string();
+                    }
                 }
-                _ => return Err(SetErrors::InvalidKey),
+                _ => {
+                    if let ValueReference::Primitive(json, key) = &entry.json {
+                        entry.render.name = SharedString::from(key);
+                    }
+                    return Err(SetErrors::InvalidKey);
+                }
             }
+
             Ok(())
         })
     }
