@@ -16,6 +16,7 @@ export struct JsonValue {
 
   // Flags
   in_filter: bool,
+  has_key: bool,
 }
 
 export component JsonRow inherits Rectangle {
@@ -33,7 +34,7 @@ export component JsonRow inherits Rectangle {
             padding-left: indent;
             alignment: start;
 
-            if value.name != "": Rectangle {
+            if value.has-key: Rectangle {
                 min-width: 1rem;
                 border-color: #bbb;
                 border-width: 1px;
@@ -41,7 +42,7 @@ export component JsonRow inherits Rectangle {
                 TextInput {
                     text: value.name;
                     input-type: text;
-                    width: parent.width;
+                    width: 100%;
 
                     accepted => {
                         let valid = JsonUtils.set-key(value.id, self.text);
@@ -53,6 +54,14 @@ export component JsonRow inherits Rectangle {
                         let valid = JsonUtils.is-valid-json-key(self.text);
                         parent.background = valid ? #333 : #c33;
                     }
+                }
+            }
+            if !value.has-key: Rectangle {
+                min-width: 1rem;
+
+                Text {
+                    text: value.name;
+                    width: 100%;
                 }
             }
 

@@ -1,27 +1,17 @@
 use std::{
     error::Error,
-    fs::{self, File},
+    fs::File,
     io::BufReader,
-    mem::take,
     path::{Path, PathBuf},
     rc::Rc,
     sync::Mutex,
     time::Instant,
 };
 
-use rayon::{
-    iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    slice::ParallelSlice,
-};
-use regex::Regex;
 use serde_json::{from_str, Value};
-use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
+use slint::{ModelRc, VecModel};
 
-use crate::{
-    json_enviroment::{Entry, JsonEnviroment},
-    json_utils::json_value::ToUI,
-    AppWindow, JsonValue, ValueType,
-};
+use crate::{json_enviroment::JsonEnviroment, unwrap_option, AppWindow};
 pub mod json_value;
 
 pub static CURRENT_JSON: Mutex<Option<JsonEnviroment>> = Mutex::new(None);
@@ -70,27 +60,16 @@ fn parse_file(path: &Path) -> Result<Value, Box<dyn Error>> {
     Ok(json)
 }
 
-pub fn set_json_values(ui: &AppWindow, values: &Vec<Entry>) {
-    let clone = {
-        let mut ret = Vec::with_capacity(values.len());
-        values.iter().for_each(|v| ret.push(v.render.clone()));
-        ret
+pub fn render_values(ui: &AppWindow) {
+    let start = Instant::now();
+    let json_ui = {
+        let lock = CURRENT_JSON.lock().unwrap();
+        let enviroment = unwrap_option!(lock.as_ref());
+        enviroment.to_ui()
     };
-    let model = ModelRc::new(Rc::new(VecModel::from(clone)));
+
+    let model = ModelRc::new(Rc::new(VecModel::from(json_ui)));
     ui.set_json_values(model);
-}
-pub fn filter_json<'a>(regex: &Regex, values: &[Entry<'a>]) -> Vec<usize> {
-    values
-        .par_iter()
-        .enumerate()
-        .filter_map(|(i, v)| {
-            if regex.is_match(v.render.name.as_str()) {
-                return Some(i);
-            }
-            if regex.is_match(v.render.value.as_str()) {
-                return Some(i);
-            }
-            None
-        })
-        .collect()
+
+    println!("Updated values in {:?}", start.elapsed());
 }

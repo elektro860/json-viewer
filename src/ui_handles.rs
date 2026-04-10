@@ -31,11 +31,11 @@ pub fn on_select_file(ui_weak: &AppWindow) {
         match json_utils::read_file(file) {
             Err(e) => eprintln!("{e}"),
             Ok(env) => {
-                let values = env.borrow_entries();
-
-                json_utils::set_json_values(&ui_weak, values);
-                let mut opt = json_utils::CURRENT_JSON.lock().unwrap();
-                *opt = Some(env);
+                {
+                    let mut opt = json_utils::CURRENT_JSON.lock().unwrap();
+                    *opt = Some(env);
+                }
+                json_utils::render_values(&ui_weak);
             }
         }
     }
@@ -44,17 +44,19 @@ pub fn on_set_filter(ui: &AppWindow, filter: &str) {
     let regex = Regex::new(filter);
 
     if let Ok(regex) = regex {
-        let mut mutex = json_utils::CURRENT_JSON.lock().unwrap();
-        let env = unwrap_option!(mutex.as_mut());
         let start = Instant::now();
+        let first = {
+            let mut mutex = json_utils::CURRENT_JSON.lock().unwrap();
+            let env = unwrap_option!(mutex.as_mut());
 
-        env.set_filter(&regex);
+            env.set_filter(&regex);
+            env.filtered_indicies.get(0).map(|x| x.0 as i32)
+        };
         println!("Filtered in {:?}", start.elapsed());
-        let filtered = env.borrow_filtered_indicies();
 
-        json_utils::set_json_values(ui, env.borrow_entries());
-        if let Some(index) = filtered.iter().next() {
-            ui.invoke_move_to(*index as i32);
+        json_utils::render_values(ui);
+        if let Some(index) = first {
+            ui.invoke_move_to(index);
         }
     } else {
         eprintln!("Invalid regex");
@@ -71,10 +73,10 @@ pub fn filter_next(ui: &AppWindow, dir: Direction) {
 
     let opt = json_utils::CURRENT_JSON.lock().unwrap();
     let enviroment = unwrap_option!(opt.deref());
-    let filter = &enviroment.borrow_filtered_indicies();
+    let filter = &enviroment.filtered_indicies;
 
     let current_index = ui.get_current_value() as usize;
-    let last_p = filter.iter().position(|index| *index > current_index);
+    let last_p = filter.iter().position(|index| index.0 > current_index);
     match last_p {
         None => {
             prev = filter.iter().nth_back(2);
@@ -90,7 +92,7 @@ pub fn filter_next(ui: &AppWindow, dir: Direction) {
         Direction::Backward => prev,
     };
     if let Some(pos) = pos {
-        ui.invoke_move_to(*pos as i32);
+        ui.invoke_move_to(pos.0 as i32);
     }
 }
 
@@ -101,22 +103,24 @@ pub(crate) enum SetErrors {
     InvalidKey,
 }
 pub fn set_value(ui: &AppWindow, id: i32, str: &str) -> Result<(), SetErrors> {
-    let mut mutex = json_utils::CURRENT_JSON.lock();
-    let env = unwrap_result!(mutex.as_deref_mut().unwrap());
+    {
+        let mut mutex = json_utils::CURRENT_JSON.lock();
+        let env = unwrap_result!(mutex.as_deref_mut().unwrap());
+        env.set_value(id as usize, str)?;
+    }
 
-    let result = env.set_value(id as usize, str);
-    json_utils::set_json_values(ui, env.borrow_entries());
-    result?;
+    json_utils::render_values(ui);
 
     Ok(())
 }
 pub fn set_key(ui: &AppWindow, id: i32, str: &str) -> Result<(), SetErrors> {
-    let mut mutex = json_utils::CURRENT_JSON.lock();
-    let env = unwrap_result!(mutex.as_deref_mut().unwrap());
+    {
+        let mut mutex = json_utils::CURRENT_JSON.lock();
+        let env = unwrap_result!(mutex.as_deref_mut().unwrap());
+        env.set_key(id as usize, str)?;
+    }
 
-    let result = env.set_key(id as usize, str);
-    json_utils::set_json_values(ui, env.borrow_entries());
-    result?;
+    json_utils::render_values(ui);
 
     Ok(())
 }
