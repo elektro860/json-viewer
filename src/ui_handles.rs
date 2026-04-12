@@ -75,8 +75,9 @@ pub fn filter_next(ui: &AppWindow, dir: Direction) {
     let enviroment = unwrap_option!(opt.deref());
     let filter = &enviroment.filtered_indicies;
 
-    let current_index = ui.get_current_value() as usize;
-    let last_p = filter.iter().position(|index| index.0 > current_index);
+    let current_index = &enviroment.entries_rendered[ui.get_current_value() as usize];
+
+    let last_p = filter.iter().position(|index| index.0 > current_index.0);
     match last_p {
         None => {
             prev = filter.iter().nth_back(2);
@@ -92,7 +93,12 @@ pub fn filter_next(ui: &AppWindow, dir: Direction) {
         Direction::Backward => prev,
     };
     if let Some(pos) = pos {
-        ui.invoke_move_to(pos.0 as i32);
+        let p = enviroment
+            .entries_rendered
+            .iter()
+            .position(|v| v.0 == pos.0)
+            .unwrap_or(0);
+        ui.invoke_move_to(p as i32);
     }
 }
 

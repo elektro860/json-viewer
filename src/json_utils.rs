@@ -63,8 +63,8 @@ fn parse_file(path: &Path) -> Result<Value, Box<dyn Error>> {
 pub fn render_values(ui: &AppWindow) {
     let start = Instant::now();
     let json_ui = {
-        let lock = CURRENT_JSON.lock().unwrap();
-        let enviroment = unwrap_option!(lock.as_ref());
+        let mut lock = CURRENT_JSON.lock().unwrap();
+        let mut enviroment = unwrap_option!(lock.as_mut());
         enviroment.to_ui()
     };
 

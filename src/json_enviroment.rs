@@ -25,6 +25,7 @@ pub struct EntryId(pub usize);
 pub struct JsonEnviroment {
     path: PathBuf,
     pub entries: Vec<Entry>,
+    pub entries_rendered: Vec<EntryId>,
     pub filtered_indicies: Vec<EntryId>,
 }
 #[derive(Debug, derive_getters::Getters)]
@@ -106,14 +107,13 @@ impl List {
 }
 
 impl JsonEnviroment {
-    pub fn to_ui(&self) -> Vec<crate::JsonValue> {
+    pub fn to_ui(&mut self) -> Vec<crate::JsonValue> {
         let start = Instant::now();
         let mut level: usize = 1;
         let mut rendered_values = self
             .entries
             .iter()
-            .enumerate()
-            .filter_map(|(i, v)| {
+            .filter_map(|v| {
                 match &v.value {
                     JsonValue::Value(_) => {
                         if v.level > level {
@@ -136,14 +136,15 @@ impl JsonEnviroment {
                     }
                 }
 
-                Some((i, v))
+                Some(v)
             })
             .collect::<Vec<_>>();
 
         let mut values = Vec::with_capacity(rendered_values.len());
         rendered_values
             .par_iter()
-            .map(|(index, entry)| entry.to_ui(*index as i32))
+            .enumerate()
+            .map(|(index, entry)| entry.to_ui(index as i32))
             .collect_into_vec(&mut values);
 
         println!(
@@ -151,6 +152,15 @@ impl JsonEnviroment {
             values.len(),
             start.elapsed()
         );
+
+        {
+            let mut entries_rendered = &mut self.entries_rendered;
+            entries_rendered.clear();
+            entries_rendered.reserve(values.len());
+            values
+                .iter()
+                .for_each(|v| self.entries_rendered.push(EntryId(v.id as usize)));
+        }
 
         let mut iter = self.filtered_indicies.iter();
         if let Some(value) = iter.next() {
@@ -183,6 +193,7 @@ impl JsonEnviroment {
         JsonEnviroment {
             path,
             entries,
+            entries_rendered: Vec::new(),
             filtered_indicies: Vec::new(),
         }
     }
@@ -220,6 +231,20 @@ impl JsonEnviroment {
                 None
             })
             .collect();
+
+        self.filtered_indicies.iter().for_each(|entry_id| {
+            let val = &self.entries[entry_id.0];
+            let mut parent = *val.parent();
+
+            (0..val.level).for_each(|_| {
+                let mut entry = &mut self.entries[parent];
+                match &mut entry.value {
+                    JsonValue::Array(v) | JsonValue::Object(v) => v.is_folded = false,
+                    _ => todo!(),
+                }
+                parent = *entry.parent();
+            });
+        });
     }
     fn populate_recursive<'this>(
         vec: &mut Vec<Entry>,
