@@ -12,7 +12,6 @@ rfd = "0.17.2"
 serde_json = "1.0.149"
 slint = { version = "1.14", features = ["raw-window-handle-06", "compat-1-2"] }
 i-slint-core = "1.14"
-ouroboros = "0.18.5"
 derive-getters = "0.5.0"
 
 [build-dependencies]
@@ -21,4 +20,4 @@ slint-build = "1.14.1"
 [profile.release]
 codegen-units = 1
 lto = true
-
+debug = true

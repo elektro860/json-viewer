@@ -1,12 +1,14 @@
 use std::{
     marker::PhantomData,
     mem::swap,
+    ops::ControlFlow,
     path::{Path, PathBuf},
     time::Instant,
 };
 
-use ouroboros::self_referencing;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelIterator,
+};
 use regex::Regex;
 use serde_json::{map::Keys, Number, Value};
 use slint::{SharedString, ToSharedString};
@@ -86,27 +88,86 @@ pub(crate) enum JsonIndex {
 #[derive(Debug)]
 pub(crate) enum JsonValue {
     Value(Value),
-    Array(usize),
-    Object(usize),
+    Array(List),
+    Object(List),
+}
+#[derive(Debug, Default)]
+pub(crate) struct List {
+    pub size: usize,
+    pub is_folded: bool,
+}
+impl List {
+    pub fn new(size: usize) -> Self {
+        List {
+            size,
+            is_folded: true,
+        }
+    }
 }
 
 impl JsonEnviroment {
     pub fn to_ui(&self) -> Vec<crate::JsonValue> {
         let start = Instant::now();
-        let mut values = self
+        let mut level: usize = 1;
+        let mut rendered_values = self
             .entries
-            .par_iter()
+            .iter()
             .enumerate()
-            .map(|(index, entry)| entry.to_ui(index as i32))
+            .filter_map(|(i, v)| {
+                match &v.value {
+                    JsonValue::Value(_) => {
+                        if v.level > level {
+                            return None;
+                        }
+                    }
+                    JsonValue::Object(list) => {
+                        if list.is_folded {
+                            level = v.level;
+                        } else {
+                            level = v.level + 1;
+                        }
+                    }
+                    JsonValue::Array(list) => {
+                        if list.is_folded {
+                            level = v.level;
+                        } else {
+                            level = v.level + 1;
+                        }
+                    }
+                }
+
+                Some((i, v))
+            })
             .collect::<Vec<_>>();
-        self.filtered_indicies.iter().for_each(|index| {
-            values[index.0].in_filter = true;
-        });
+
+        let mut values = Vec::with_capacity(rendered_values.len());
+        rendered_values
+            .par_iter()
+            .map(|(index, entry)| entry.to_ui(*index as i32))
+            .collect_into_vec(&mut values);
+
         println!(
             "Converted ({}) to UI in {:?}",
             values.len(),
             start.elapsed()
         );
+
+        let mut iter = self.filtered_indicies.iter();
+        if let Some(value) = iter.next() {
+            let mut value = value.0 as i32;
+            for v in values.iter_mut() {
+                if value != v.id {
+                    continue;
+                }
+
+                v.in_filter = true;
+                if let Some(v) = iter.next() {
+                    value = v.0 as i32;
+                } else {
+                    break;
+                }
+            }
+        }
 
         values
     }
@@ -173,7 +234,7 @@ impl JsonEnviroment {
             Value::Array(v) => {
                 vec.push(Entry {
                     index,
-                    value: JsonValue::Array(v.len()),
+                    value: JsonValue::Array(List::new(v.len())),
                     parent,
                     level,
                 });
@@ -184,7 +245,7 @@ impl JsonEnviroment {
             Value::Object(v) => {
                 vec.push(Entry {
                     index,
-                    value: JsonValue::Object(v.len()),
+                    value: JsonValue::Object(List::new(v.len())),
                     parent,
                     level,
                 });
