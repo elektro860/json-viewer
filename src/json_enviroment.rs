@@ -53,6 +53,11 @@ impl ToUI for Entry {
                 format!("\"{key}\"").into()
             }
         };
+        let is_folded = match self.value() {
+            JsonValue::Object(v) => v.is_folded,
+            JsonValue::Array(v) => v.is_folded,
+            _ => false,
+        };
 
         crate::JsonValue {
             level: *self.level() as i32,
@@ -62,6 +67,7 @@ impl ToUI for Entry {
             id,
             in_filter: false,
             has_key,
+            is_folded,
         }
     }
     fn value_type(&self) -> ValueType {
@@ -109,11 +115,12 @@ impl List {
 impl JsonEnviroment {
     pub fn to_ui(&mut self) -> Vec<crate::JsonValue> {
         let start = Instant::now();
-        let mut level: usize = 1;
+        let mut level: usize = 0;
         let mut rendered_values = self
             .entries
             .iter()
-            .filter_map(|v| {
+            .enumerate()
+            .filter_map(|(index, v)| {
                 match &v.value {
                     JsonValue::Value(_) => {
                         if v.level > level {
@@ -136,15 +143,14 @@ impl JsonEnviroment {
                     }
                 }
 
-                Some(v)
+                Some((index, v))
             })
             .collect::<Vec<_>>();
 
         let mut values = Vec::with_capacity(rendered_values.len());
         rendered_values
             .par_iter()
-            .enumerate()
-            .map(|(index, entry)| entry.to_ui(index as i32))
+            .map(|(index, entry)| entry.to_ui(*index as i32))
             .collect_into_vec(&mut values);
 
         println!(
@@ -199,6 +205,23 @@ impl JsonEnviroment {
     }
     pub fn path(&self) -> &Path {
         self.path.as_path()
+    }
+    pub fn get_id(&self, id: usize) -> Option<EntryId> {
+        if id < self.entries.len() {
+            return Some(EntryId(id));
+        } else {
+            return None;
+        }
+    }
+    pub fn toggle_fold(&mut self, id: &EntryId) -> Result<(), SetErrors> {
+        let mut entry = self.entries.get_mut(id.0).ok_or(SetErrors::InvalidIndex)?;
+        match &mut entry.value {
+            JsonValue::Object(v) => v.is_folded = !v.is_folded,
+            JsonValue::Array(v) => v.is_folded = !v.is_folded,
+            _ => return Err(SetErrors::InvalidJson),
+        }
+
+        Ok(())
     }
     pub fn set_filter(&mut self, regex: &Regex) {
         self.filtered_indicies = self

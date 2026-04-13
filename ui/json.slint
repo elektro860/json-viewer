@@ -17,6 +17,7 @@ export struct JsonValue {
   // Flags
   in_filter: bool,
   has_key: bool,
+  is_folded: bool,
 }
 
 export component JsonRow inherits Rectangle {
@@ -27,7 +28,13 @@ export component JsonRow inherits Rectangle {
     height: 30px;
     width: 100%;
 
-    background: value.in-filter ? #933 : #333;
+    background: value.in-filter ? value.is-folded ? #a55 : #933 : value.is-folded ? #444 : value.value-type == ValueType.array || value.value-type == ValueType.object ? #222 : #333;
+    ta := TouchArea {
+        clicked => {
+            JsonUtils.toggle-fold(value.id);
+        }
+    }
+
     VerticalLayout {
         spacing: 0;
         HorizontalLayout {
@@ -86,6 +93,7 @@ export component JsonRow inherits Rectangle {
                         let valid = JsonUtils.set-value(value.id, self.text);
                         if !valid {
                             self.text = value.name;
+                            parent.background = #333;
                         }
                     }
                     edited => {
@@ -100,13 +108,11 @@ export component JsonRow inherits Rectangle {
             height: 1px;
             background: #222;
         }
-
-        // ta := TouchArea { }
-    //
-    // states [
-    //     hover when ta.has-hover: {
-    //         background: #555;
-    //     }
-    // ]
     }
+
+    states [
+        hover when ta.has-hover: {
+            background: #555;
+        }
+    ]
 }

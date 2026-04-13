@@ -130,3 +130,15 @@ pub fn set_key(ui: &AppWindow, id: i32, str: &str) -> Result<(), SetErrors> {
 
     Ok(())
 }
+pub fn toggle_key(ui: &AppWindow, id: i32) {
+    let result = {
+        let mut lock = json_utils::CURRENT_JSON.lock().unwrap();
+        let mut env = unwrap_option!(lock.as_mut());
+        let id = unwrap_option!(env.get_id(id as usize));
+        env.toggle_fold(&id)
+    };
+
+    if let Ok(r) = result {
+        json_utils::render_values(ui);
+    }
+}
