@@ -10,7 +10,7 @@ use rayon::iter::{
     IndexedParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelIterator,
 };
 use regex::Regex;
-use serde_json::{map::Keys, Number, Value};
+use serde_json::{map::Keys, Map, Number, Value};
 use slint::{SharedString, ToSharedString};
 
 use crate::{
@@ -202,6 +202,55 @@ impl JsonEnviroment {
             entries_rendered: Vec::new(),
             filtered_indicies: Vec::new(),
         }
+    }
+    pub fn to_json(&self) -> Option<Value> {
+        fn to_value(entry: &Entry, entries: &[Entry]) -> Value {
+            match entry.value() {
+                JsonValue::Object(v) => {
+                    let mut obj = Map::with_capacity(v.size);
+                    let level = entry.level + 1;
+                    let mut iter = entries.iter().enumerate();
+                    iter.next();
+                    (0..v.size).for_each(|index| {
+                        let (i, v) = iter.next().unwrap();
+
+                        let k = {
+                            match v.index() {
+                                JsonIndex::Key(s) => s.clone(),
+                                _ => panic!("Wrong key for parsed object"),
+                            }
+                        };
+                        let p = iter.position(|(i, v)| *v.level() == level).unwrap();
+                        let slice = &entries[i + 1..p - 1];
+
+                        obj.insert(k, to_value(v, slice));
+                    });
+
+                    Value::Object(obj)
+                }
+                JsonValue::Array(v) => {
+                    let mut arr = Vec::with_capacity(v.size);
+                    let level = entry.level + 1;
+                    let mut iter = entries.iter().enumerate();
+                    (0..v.size).for_each(|index| {
+                        let (i, v) = iter.next().unwrap();
+
+                        let p = iter.position(|(i, v)| *v.level() == level).unwrap();
+                        let slice = &entries[i + 1..p - 1];
+
+                        arr.push(to_value(v, slice));
+                    });
+
+                    Value::Array(arr)
+                }
+                JsonValue::Value(v) => v.clone(),
+            }
+        }
+
+        Some(to_value(
+            self.entries.first()?,
+            &self.entries[0..self.entries.len()],
+        ))
     }
     pub fn path(&self) -> &Path {
         self.path.as_path()
