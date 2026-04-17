@@ -188,6 +188,12 @@ impl JsonEnviroment {
             let mut ret = Vec::with_capacity(json_utils::get_value_count(&json) + 100);
             Self::populate_recursive(&mut ret, json, JsonIndex::Root, 0, 0);
             println!("Initialized enviroment in {:?}", start.elapsed());
+            ret.iter_mut()
+                .skip_while(|v| *v.level() > 1)
+                .for_each(|ent| match &mut ent.value {
+                    JsonValue::Object(v) | JsonValue::Array(v) => v.is_folded = false,
+                    _ => {}
+                });
 
             ret
         };
