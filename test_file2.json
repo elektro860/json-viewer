@@ -1,0 +1,48 @@
+{
+  "strings": [
+    "hello world",
+    "foo bar",
+    "foo bar",
+    "foo bar",
+    "foo bar",
+    "foo bar",
+    "foo bar"
+  ],
+  "empty": [],
+  "empty2": {},
+  "one": [
+    1
+  ],
+  "two": {
+    "one": 1
+  },
+  "numbers": {
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6
+  },
+  "objects": [
+    {
+      "type": 1
+    },
+    {
+      "type": 1
+    },
+    {
+      "type": 1
+    },
+    {
+      "type": 1
+    },
+    {
+      "type": 999
+    },
+    {
+      "type": 1
+    }
+  ],
+  "test": 67
+}
