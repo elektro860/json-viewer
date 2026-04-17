@@ -40,7 +40,7 @@ pub fn on_save(ui_weak: &AppWindow) {
         let r = unwrap_option!(lock.as_ref());
         (unwrap_option!(r.to_json()), r.path().to_owned())
     };
-    let path = unwrap_option!(path.parent());
+    let path = path.parent().unwrap_or(&path);
 
     let dialog = FileDialog::new()
         .set_parent(&handle)
