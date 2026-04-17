@@ -16,7 +16,8 @@ export component AppWindow inherits Window {
     callback key_press(KeyEvent);
     callback check_filter(string);
     property <image> file_img: @image-url("images/file.svg");
-    property <image> search_img: @image-url("images/search.svg");
+    // property <image> search_img: @image-url("images/search.svg");
+    property <image> save_img: @image-url("images/save.svg");
     in property <[JsonValue]> json_values;
     in property <bool> is_regex_valid: true;
     out property <int> current_value: values.viewport-y / -30px;
@@ -67,15 +68,27 @@ export component AppWindow inherits Window {
                     }
                 }
 
+                // Rectangle {
+                //     width: 50px;
+                //     Button {
+                //         width: 100%;
+                //         height: 100%;
+                //         icon: search_img;
+                //         clicked => {
+                //             set_filter(filter.text);
+                //             input.focus();
+                //         }
+                //     }
+                // }
+
                 Rectangle {
                     width: 50px;
                     Button {
                         width: 100%;
                         height: 100%;
-                        icon: search_img;
+                        icon: save_img;
                         clicked => {
-                            set_filter(filter.text);
-                            input.focus();
+                            JsonUtils.save();
                         }
                     }
                 }
