@@ -3,7 +3,9 @@ use std::{
     time::Instant,
 };
 
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 use regex::Regex;
 use serde_json::{Map, Value};
 use slint::{SharedString, ToSharedString};
@@ -49,8 +51,7 @@ impl ToUI for Entry {
             }
         };
         let is_folded = match self.value() {
-            JsonValue::Object(v) => v.is_folded,
-            JsonValue::Array(v) => v.is_folded,
+            JsonValue::Object(v) | JsonValue::Array(v) => v.is_folded,
             _ => false,
         };
 
@@ -108,45 +109,90 @@ impl List {
 }
 
 impl JsonEnviroment {
+    pub fn value_slice_mut(entries: &mut [Entry]) -> Option<&mut [Entry]> {
+        let v = entries.first()?;
+        let level = *v.level() + 1;
+        match v.value() {
+            JsonValue::Value(_) => Some(&mut entries[0..0]),
+            JsonValue::Object(v) | JsonValue::Array(v) => {
+                if v.size == 0 {
+                    Some(&mut entries[0..0])
+                } else {
+                    let (ret, _) = entries
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, v)| *v.level() == level)
+                        .nth(v.size - 1)
+                        .unwrap();
+                    let extra = match entries[ret..]
+                        .iter()
+                        .enumerate()
+                        .find(|(_, v)| *v.level() < level)
+                    {
+                        Some((extra, _)) => extra,
+                        None => return Some(entries),
+                    };
+
+                    Some(&mut entries[0..ret + extra])
+                }
+            }
+        }
+    }
+    pub fn value_slice(entries: &[Entry]) -> Option<&[Entry]> {
+        let v = entries.first()?;
+        let level = *v.level() + 1;
+        match v.value() {
+            JsonValue::Value(_) => Some(&entries[0..0]),
+            JsonValue::Object(v) | JsonValue::Array(v) => {
+                if v.size == 0 {
+                    Some(&entries[0..0])
+                } else {
+                    let (ret, _) = entries
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, v)| *v.level() == level)
+                        .nth(v.size - 1)
+                        .unwrap();
+                    let extra = match entries[ret..]
+                        .iter()
+                        .enumerate()
+                        .find(|(_, v)| *v.level() < level)
+                    {
+                        Some((extra, _)) => extra,
+                        None => return Some(entries),
+                    };
+
+                    Some(&entries[0..ret + extra])
+                }
+            }
+        }
+    }
+    pub fn fold(&mut self, index: &EntryId) -> Result<(), SetErrors> {
+        let _entry = self.entries.get(index.0).ok_or(SetErrors::InvalidIndex)?;
+        let slice = JsonEnviroment::value_slice_mut(&mut self.entries[index.0..])
+            .ok_or(SetErrors::InvalidJson)?;
+
+        slice
+            .par_iter_mut()
+            .for_each(|entry| match &mut entry.value {
+                JsonValue::Object(v) | JsonValue::Array(v) => v.is_folded = true,
+                _ => {}
+            });
+
+        Ok(())
+    }
     pub fn to_ui(&mut self) -> Vec<crate::JsonValue> {
         let start = Instant::now();
-        let mut level: usize = 0;
-        let rendered_values = self
+        let mut values: Vec<_> = self
             .entries
-            .iter()
-            .enumerate()
-            .filter_map(|(index, v)| {
-                match &v.value {
-                    JsonValue::Value(_) => {
-                        if v.level > level {
-                            return None;
-                        }
-                    }
-                    JsonValue::Object(list) => {
-                        if list.is_folded {
-                            level = v.level;
-                        } else {
-                            level = v.level + 1;
-                        }
-                    }
-                    JsonValue::Array(list) => {
-                        if list.is_folded {
-                            level = v.level;
-                        } else {
-                            level = v.level + 1;
-                        }
-                    }
-                }
-
-                Some((index, v))
-            })
-            .collect::<Vec<_>>();
-
-        let mut values = Vec::with_capacity(rendered_values.len());
-        rendered_values
             .par_iter()
-            .map(|(index, entry)| entry.to_ui(*index as i32))
-            .collect_into_vec(&mut values);
+            .enumerate()
+            .filter(|(_, entry)| match self.entries[*entry.parent()].value() {
+                JsonValue::Object(v) | JsonValue::Array(v) => !v.is_folded,
+                _ => panic!("Parented to a non list object"),
+            })
+            .map(|(index, entry)| entry.to_ui(index as i32))
+            .collect();
 
         println!(
             "Converted ({}) to UI in {:?}",
@@ -188,12 +234,12 @@ impl JsonEnviroment {
             let mut ret = Vec::with_capacity(json_utils::get_value_count(&json) + 100);
             Self::populate_recursive(&mut ret, json, JsonIndex::Root, 0, 0);
             println!("Initialized enviroment in {:?}", start.elapsed());
-            ret.iter_mut()
-                .skip_while(|v| *v.level() > 1)
-                .for_each(|ent| match &mut ent.value {
+            if let Some(e) = ret.first_mut() {
+                match &mut e.value {
                     JsonValue::Object(v) | JsonValue::Array(v) => v.is_folded = false,
                     _ => {}
-                });
+                }
+            }
 
             ret
         };
@@ -205,34 +251,6 @@ impl JsonEnviroment {
         }
     }
     pub fn to_json(&self) -> Option<Value> {
-        fn value_end(v: &Entry, entries: &[Entry]) -> usize {
-            let level = *v.level() + 1;
-            match v.value() {
-                JsonValue::Value(_) => 0,
-                JsonValue::Object(v) | JsonValue::Array(v) => {
-                    if v.size == 0 {
-                        0
-                    } else {
-                        let (ret, _) = entries
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, v)| *v.level() == level)
-                            .nth(v.size - 1)
-                            .unwrap();
-                        let extra = match entries[ret..]
-                            .iter()
-                            .enumerate()
-                            .find(|(_, v)| *v.level() < level)
-                        {
-                            Some((extra, _)) => extra - 1,
-                            None => return entries.len() - 1,
-                        };
-
-                        ret + extra
-                    }
-                }
-            }
-        }
         fn to_value(entry: &Entry, entries: &[Entry]) -> Value {
             match entry.value() {
                 JsonValue::Object(v) => {
@@ -248,11 +266,10 @@ impl JsonEnviroment {
                                 _ => panic!("Wrong key for parsed object"),
                             }
                         };
-                        let p = value_end(v, &entries[i..]);
+                        let slice = JsonEnviroment::value_slice(&entries[i..]).unwrap();
 
-                        let slice = &entries[i..=i + p];
-                        if p > 0 {
-                            iter.nth(p - 1);
+                        if !slice.is_empty() {
+                            iter.nth(slice.len() - 1);
                         }
 
                         // println!("{}: values({})", &k, p);
@@ -268,11 +285,10 @@ impl JsonEnviroment {
                     (0..v.size).for_each(|_index| {
                         let (i, v) = iter.next().unwrap();
 
-                        let p = value_end(v, &entries[i..]);
+                        let slice = JsonEnviroment::value_slice(&entries[i..]).unwrap();
 
-                        let slice = &entries[i..=i + p];
-                        if p > 0 {
-                            iter.nth(p - 1);
+                        if !slice.is_empty() {
+                            iter.nth(slice.len() - 1);
                         }
 
                         // println!("{}: values({})", _index, p);
@@ -299,9 +315,18 @@ impl JsonEnviroment {
     }
     pub fn toggle_fold(&mut self, id: &EntryId) -> Result<(), SetErrors> {
         let entry = self.entries.get_mut(id.0).ok_or(SetErrors::InvalidIndex)?;
+        if let JsonIndex::Root = entry.index() {
+            return Err(SetErrors::InvalidIndex);
+        }
+
         match &mut entry.value {
-            JsonValue::Object(v) => v.is_folded = !v.is_folded,
-            JsonValue::Array(v) => v.is_folded = !v.is_folded,
+            JsonValue::Object(v) | JsonValue::Array(v) => {
+                if v.is_folded {
+                    v.is_folded = false;
+                } else {
+                    self.fold(id);
+                }
+            }
             _ => return Err(SetErrors::InvalidJson),
         }
 
