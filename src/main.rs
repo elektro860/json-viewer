@@ -60,7 +60,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ui_weak = ui.as_weak().unwrap();
     json_utils.on_toggle_fold(move |id| ui_handles::toggle_key(&ui_weak, id));
     let ui_weak = ui.as_weak().unwrap();
-    json_utils.on_save(move || {});
+    json_utils.on_save(move || {
+        ui_handles::on_save(&ui_weak);
+    });
 
     ui.run()?;
 

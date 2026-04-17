@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::error::Error;
+use std::fs::File;
+use std::io::BufWriter;
 use std::mem::swap;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -38,6 +40,42 @@ pub fn on_select_file(ui_weak: &AppWindow) {
                 json_utils::render_values(&ui_weak);
             }
         }
+    }
+}
+pub fn on_save(ui_weak: &AppWindow) {
+    let handle = ui_weak.window().window_handle();
+    let (json, path) = {
+        let lock = json_utils::CURRENT_JSON.lock().unwrap();
+        let r = unwrap_option!(lock.as_ref());
+        (unwrap_option!(r.to_json()), r.path().to_path_buf())
+    };
+
+    let dialog = FileDialog::new()
+        .set_parent(&handle)
+        .set_title("Save json")
+        .add_filter("JSON", &["json"])
+        .set_directory(path)
+        .save_file();
+    let dialog = unwrap_option!(dialog);
+
+    let writer = match File::create(dialog) {
+        Ok(v) => v,
+        Err(e) => {
+            rfd::MessageDialog::new()
+                .set_title("Error while creating file")
+                .set_buttons(rfd::MessageButtons::Ok)
+                .set_description(e.to_string())
+                .show();
+            return;
+        }
+    };
+
+    if let Err(e) = serde_json::to_writer_pretty(writer, &json) {
+        rfd::MessageDialog::new()
+            .set_title("Error while writing to file")
+            .set_buttons(rfd::MessageButtons::Ok)
+            .set_description(e.to_string())
+            .show();
     }
 }
 pub fn on_set_filter(ui: &AppWindow, filter: &str) {
