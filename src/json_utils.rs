@@ -25,7 +25,7 @@ pub fn get_value_count(json: &Value) -> usize {
         }
         Value::Object(map) => {
             map.iter()
-                .for_each(|(key, v)| counter += get_value_count(v));
+                .for_each(|(_key, v)| counter += get_value_count(v));
         }
         _ => {}
     }
@@ -43,7 +43,7 @@ pub fn valide_json_key(json_text: &str) -> bool {
     let result = from_str::<Value>(str);
     match result {
         Ok(v) => v.is_string(),
-        Err(e) => false,
+        Err(_e) => false,
     }
 }
 
@@ -64,7 +64,7 @@ pub fn render_values(ui: &AppWindow) {
     let start = Instant::now();
     let json_ui = {
         let mut lock = CURRENT_JSON.lock().unwrap();
-        let mut enviroment = unwrap_option!(lock.as_mut());
+        let enviroment = unwrap_option!(lock.as_mut());
         enviroment.to_ui()
     };
 

@@ -1,24 +1,15 @@
-use std::cell::RefCell;
-use std::error::Error;
+use std::env;
 use std::fs::File;
-use std::io::BufWriter;
-use std::mem::swap;
 use std::ops::Deref;
-use std::rc::Rc;
 use std::time::Instant;
-use std::{env, rc::Weak};
 
 use regex::Regex;
 use rfd::FileDialog;
-use serde_json::{from_str, Value};
-use slint::{ComponentHandle, SharedString};
+use slint::ComponentHandle;
 
-use crate::json_enviroment::JsonEnviroment;
-use crate::json_utils::json_value::ToUI;
-use crate::json_utils::validate_json_value;
 use crate::slint_generatedAppWindow::AppWindow;
-use crate::{json_utils, ui_handles, unwrap_result};
-use crate::{unwrap_option, JsonValue};
+use crate::unwrap_option;
+use crate::{json_utils, unwrap_result};
 
 pub fn on_select_file(ui_weak: &AppWindow) {
     let handle = ui_weak.window().window_handle();
@@ -37,7 +28,7 @@ pub fn on_select_file(ui_weak: &AppWindow) {
                     let mut opt = json_utils::CURRENT_JSON.lock().unwrap();
                     *opt = Some(env);
                 }
-                json_utils::render_values(&ui_weak);
+                json_utils::render_values(ui_weak);
             }
         }
     }
@@ -47,8 +38,9 @@ pub fn on_save(ui_weak: &AppWindow) {
     let (json, path) = {
         let lock = json_utils::CURRENT_JSON.lock().unwrap();
         let r = unwrap_option!(lock.as_ref());
-        (unwrap_option!(r.to_json()), r.path().to_path_buf())
+        (unwrap_option!(r.to_json()), r.path().to_owned())
     };
+    let path = unwrap_option!(path.parent());
 
     let dialog = FileDialog::new()
         .set_parent(&handle)
@@ -88,7 +80,7 @@ pub fn on_set_filter(ui: &AppWindow, filter: &str) {
             let env = unwrap_option!(mutex.as_mut());
 
             env.set_filter(&regex);
-            env.filtered_indicies.get(0).map(|x| x.0 as i32)
+            env.filtered_indicies.first().map(|x| x.0 as i32)
         };
         println!("Filtered in {:?}", start.elapsed());
 
@@ -106,9 +98,6 @@ pub enum Direction {
     Backward,
 }
 pub fn filter_next(ui: &AppWindow, dir: Direction) {
-    let mut prev = None;
-    let mut next = None;
-
     let opt = json_utils::CURRENT_JSON.lock().unwrap();
     let enviroment = unwrap_option!(opt.deref());
     let filter = &enviroment.filtered_indicies;
@@ -116,20 +105,14 @@ pub fn filter_next(ui: &AppWindow, dir: Direction) {
     let current_index = &enviroment.entries_rendered[ui.get_current_value() as usize];
 
     let last_p = filter.iter().position(|index| index.0 > current_index.0);
-    match last_p {
-        None => {
-            prev = filter.iter().nth_back(2);
-        }
-        Some(id) => {
-            next = filter.get(id);
-            prev = filter.get(id.saturating_sub(2));
-        }
-    }
-
-    let pos = match dir {
-        Direction::Forward => next,
-        Direction::Backward => prev,
+    let pos = match last_p {
+        None => filter.iter().nth_back(2),
+        Some(id) => match dir {
+            Direction::Forward => filter.get(id),
+            Direction::Backward => filter.get(id.saturating_sub(2)),
+        },
     };
+
     if let Some(pos) = pos {
         let p = enviroment
             .entries_rendered
@@ -171,12 +154,12 @@ pub fn set_key(ui: &AppWindow, id: i32, str: &str) -> Result<(), SetErrors> {
 pub fn toggle_key(ui: &AppWindow, id: i32) {
     let result = {
         let mut lock = json_utils::CURRENT_JSON.lock().unwrap();
-        let mut env = unwrap_option!(lock.as_mut());
+        let env = unwrap_option!(lock.as_mut());
         let id = unwrap_option!(env.get_id(id as usize));
         env.toggle_fold(&id)
     };
 
-    if let Ok(r) = result {
+    if let Ok(_r) = result {
         json_utils::render_values(ui);
     }
 }

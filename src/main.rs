@@ -1,22 +1,10 @@
 // Prevent console window in addition to Slint window in Windows release builds when, e.g., starting the app via file manager. Ignored on other platforms.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{
-    cell::RefCell,
-    env,
-    error::Error,
-    mem::take,
-    ops::Deref,
-    path::{Path, PathBuf},
-    rc::{Rc, Weak},
-    sync::{Arc, Mutex},
-};
+use std::error::Error;
 
 use regex::Regex;
-use rfd::FileDialog;
-use slint::{ComponentHandle, ModelRc, VecModel};
-
-use crate::json_enviroment::JsonEnviroment;
+use slint::ComponentHandle;
 
 slint::include_modules!();
 
@@ -67,4 +55,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     ui.run()?;
 
     Ok(())
+}
+
+#[test]
+fn test_write_json() {
+    fn test_json(path: &str) {
+        println!("TESTING {path}");
+        let r = json_utils::read_file(path.into()).unwrap();
+        println!("{}", r.to_json().unwrap());
+    }
+
+    test_json("./test_file2.json");
+    test_json("./test_file.json");
 }
